@@ -12,10 +12,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from config import CORS_ORIGINS, validate
-from services.progress_store import progress_store
 from routes.files import router as files_router
 from routes.stream import router as stream_router
-from routes.progress import router as progress_router
 
 # ------------------------------------------------------------------
 # logging
@@ -35,7 +33,6 @@ logger = logging.getLogger("drive-pleya")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup / shutdown logic."""
-    # --- startup -----------------------------------------------------------
     missing = validate()
     if missing:
         logger.error(
@@ -44,25 +41,9 @@ async def lifespan(app: FastAPI):
             ", ".join(missing),
         )
     else:
-        logger.info("google drive credentials found")
+        logger.info("google drive oauth configured — ready")
 
-    try:
-        await progress_store.initialize()
-        logger.info("progress store ready")
-    except Exception:
-        logger.warning(
-            "could not initialise progress store (drive may be unreachable).  "
-            "progress tracking will start fresh when drive becomes available."
-        )
-
-    yield  # --- app runs here ----------------------------------------------
-
-    # --- shutdown ----------------------------------------------------------
-    logger.info("shutting down – flushing progress ...")
-    try:
-        await progress_store.flush()
-    except Exception:
-        logger.exception("failed to flush progress on shutdown")
+    yield
 
 
 # ------------------------------------------------------------------
@@ -75,8 +56,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# --- CORS ------------------------------------------------------------------
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
@@ -85,14 +64,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- routers ---------------------------------------------------------------
-
 app.include_router(files_router)
 app.include_router(stream_router)
-app.include_router(progress_router)
 
-
-# --- health ----------------------------------------------------------------
 
 @app.get("/api/health")
 async def health():

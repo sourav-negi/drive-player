@@ -2,7 +2,7 @@
 // drive-pleya — clickable / draggable seek bar
 // ------------------------------------------------------------------
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 
 interface Props {
   currentTime: number;
@@ -20,7 +20,7 @@ export function SeekBar({ currentTime, duration, onSeek }: Props) {
   const barRef = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState(false);
   const [hoverTime, setHoverTime] = useState<number | null>(null);
-  const [hoverX, setHoverX] = useState(0);
+  const [hoverOffset, setHoverOffset] = useState(0);
 
   const pct = duration > 0 ? (currentTime / duration) * 100 : 0;
 
@@ -34,20 +34,22 @@ export function SeekBar({ currentTime, duration, onSeek }: Props) {
     [duration],
   );
 
-  const handleClick = (e: React.MouseEvent) => {
+  const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
     onSeek(toSeconds(e.clientX));
   };
 
-  const handleMouseDown = (e: React.MouseEvent) => {
+  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     setDragging(true);
     onSeek(toSeconds(e.clientX));
   };
 
   const handleMouseMove = useCallback(
-    (e: MouseEvent) => {
+    (e: { clientX: number }) => {
+      if (!barRef.current) return;
+      const rect = barRef.current.getBoundingClientRect();
       const t = toSeconds(e.clientX);
       setHoverTime(t);
-      setHoverX(e.clientX);
+      setHoverOffset(e.clientX - rect.left);
       if (dragging) onSeek(t);
     },
     [dragging, onSeek, toSeconds],
@@ -86,8 +88,9 @@ export function SeekBar({ currentTime, duration, onSeek }: Props) {
         onClick={handleClick}
         onMouseDown={handleMouseDown}
         onMouseMove={(e) => {
+          const rect = barRef.current?.getBoundingClientRect();
           setHoverTime(toSeconds(e.clientX));
-          setHoverX(e.clientX);
+          if (rect) setHoverOffset(e.clientX - rect.left);
         }}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
@@ -110,7 +113,7 @@ export function SeekBar({ currentTime, duration, onSeek }: Props) {
       {hoverTime !== null && !dragging && (
         <div
           className="absolute -top-7 text-[11px] bg-surface-card text-text px-1.5 py-0.5 rounded pointer-events-none"
-          style={{ left: hoverX, transform: "translateX(-50%)" }}
+          style={{ left: hoverOffset, transform: "translateX(-50%)" }}
         >
           {fmt(hoverTime)}
         </div>

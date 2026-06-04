@@ -7,6 +7,7 @@
 import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
+import { progressStore } from "@/lib/progressStore";
 import { VideoPlayer } from "@/components/VideoPlayer";
 import { UiState } from "@/components/UiState";
 import type { VideoFile, WatchProgress } from "@/lib/types";
@@ -30,10 +31,8 @@ export default function WatchPage({ params }: Props) {
     async function load() {
       setStatus("loading");
       try {
-        const [f, p] = await Promise.all([
-          api.getFile(id),
-          api.getProgress(id).catch(() => null),
-        ]);
+        const f = await api.getFile(id);
+        const p = progressStore.get(id);
         if (cancelled) return;
         setFile(f);
         setProgress(p ?? undefined);

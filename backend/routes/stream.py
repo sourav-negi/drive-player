@@ -1,44 +1,36 @@
 """
 Video streaming endpoint.
 
-Two modes (controlled by ``USE_DIRECT_REDIRECT`` in config):
-  "proxy"    – backend fetches bytes from Drive and streams them to the
-               client.  Supports HTTP range requests for seeking.
-  "redirect" – backend returns a 302 to the Google Drive download URL.
-               Zero backend bandwidth, but the access token is visible
-               in the redirect URL.
+Uses the service account's OAuth access token to fetch video bytes from
+Google Drive.  Redirect mode is no longer supported (access tokens are
+short-lived and must not be exposed in URLs).
 """
 
 import logging
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import RedirectResponse, StreamingResponse
+from fastapi.responses import StreamingResponse
 from services.drive_client import drive_client
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["stream"])
 
-# how many bytes to read per chunk when proxying
 CHUNK_SIZE = 64 * 1024  # 64 KB
 
 
 @router.get("/files/{file_id}/stream")
 async def stream_video(file_id: str, request: Request):
-    """Stream (or redirect to) a video from Google Drive.
+    """Stream a video from Google Drive via the backend proxy.
 
-    Supports the ``?redirect`` query parameter to force redirect mode
-    regardless of the server-side default.
+    Uses the service account access token for authentication.
+    Supports HTTP range requests for seeking.
     """
-    from config import USE_DIRECT_REDIRECT
-
-    use_redirect = USE_DIRECT_REDIRECT
-    if request.query_params.get("redirect") == "1":
-        use_redirect = True
+    import httpx
 
     try:
-        token = drive_client.get_access_token()
+        access_token = drive_client.get_access_token()
     except Exception:
-        logger.exception("failed to get access token")
+        logger.exception("failed to obtain drive access token")
         raise HTTPException(status_code=502, detail="drive auth error")
 
     url = (
@@ -46,18 +38,9 @@ async def stream_video(file_id: str, request: Request):
         f"{file_id}?alt=media"
     )
 
-    if use_redirect:
-        # ------------------------------------------------------------------
-        # redirect mode – zero backend bandwidth
-        # ------------------------------------------------------------------
-        return RedirectResponse(url=f"{url}&access_token={token}")
-
-    # ------------------------------------------------------------------
-    # proxy mode – stream through the backend
-    # ------------------------------------------------------------------
-    import httpx
-
-    headers = {"Authorization": f"Bearer {token}"}
+    headers: dict[str, str] = {
+        "Authorization": f"Bearer {access_token}",
+    }
     range_header = request.headers.get("range", "")
     if range_header:
         headers["Range"] = range_header
@@ -73,12 +56,6 @@ async def stream_video(file_id: str, request: Request):
                 async for chunk in resp.aiter_bytes(CHUNK_SIZE):
                     yield chunk
 
-    # We need to know the response status and content headers before we
-    # start streaming.  Do a quick HEAD-equivalent request first.
-    # Actually, we can make the GET and return headers from the response
-    # once available.  FastAPI's StreamingResponse allows setting
-    # headers upfront; we use sensible defaults and let the client
-    # handle the rest.
     return StreamingResponse(
         _stream(),
         media_type="video/mp4",

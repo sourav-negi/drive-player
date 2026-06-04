@@ -38,16 +38,5 @@ export interface WatchProgress {
   lastUpdated: string | null;
 }
 
-/** Full progress map from GET /api/progress */
-export interface ProgressResponse {
-  videos: Record<string, WatchProgress>;
-}
-
-/** Payload for POST /api/progress/{id} */
-export interface ProgressUpdate {
-  position: number;
-  duration: number;
-}
-
 /** Possible states for a data-fetching component. */
 export type UiStatus = "loading" | "error" | "empty" | "success";

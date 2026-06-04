@@ -2,7 +2,7 @@
 // drive-pleya — video player state management
 // ------------------------------------------------------------------
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 
 export type PlaybackSpeed = 0.5 | 0.75 | 1 | 1.25 | 1.5 | 2;
 
@@ -28,7 +28,7 @@ function saveStored(key: string, value: unknown) {
   }
 }
 
-export function useVideoPlayer(videoRef: React.RefObject<HTMLVideoElement | null>) {
+export function useVideoPlayer(videoRef: RefObject<HTMLVideoElement | null>) {
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -38,6 +38,15 @@ export function useVideoPlayer(videoRef: React.RefObject<HTMLVideoElement | null
     loadStored(STORAGE_KEY_SPEED, 1),
   );
   const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // sync fullscreen state with browser (handles Esc key)
+  useEffect(() => {
+    const handler = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener("fullscreenchange", handler);
+    return () => document.removeEventListener("fullscreenchange", handler);
+  }, []);
 
   // sync from video element events
   useEffect(() => {

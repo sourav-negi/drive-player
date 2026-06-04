@@ -2,8 +2,10 @@
 // drive-pleya — responsive file grid
 // ------------------------------------------------------------------
 
+import type { ReactNode } from "react";
+
 interface Props {
-  children: React.ReactNode;
+  children: ReactNode;
 }
 
 export function FileGrid({ children }: Props) {

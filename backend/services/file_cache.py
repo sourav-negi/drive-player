@@ -42,4 +42,5 @@ class FileCache:
                 self._cache.clear()
 
     def __len__(self) -> int:
-        return len(self._cache)
+        with self._lock:
+            return len(self._cache)

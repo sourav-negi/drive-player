@@ -1,9 +1,9 @@
 // ------------------------------------------------------------------
-// drive-pleya — watch progress tracking
+// drive-pleya — watch progress tracking (localStorage)
 // ------------------------------------------------------------------
 
-import { useCallback, useEffect, useRef } from "react";
-import { api } from "@/lib/api";
+import { useCallback, useEffect, useRef, type RefObject } from "react";
+import { progressStore } from "@/lib/progressStore";
 import type { WatchProgress } from "@/lib/types";
 
 const SAVE_INTERVAL_MS = 10_000;   // periodic save while playing
@@ -11,7 +11,7 @@ const RESUME_THRESHOLD_S = 5;      // only ask to resume if > 5 s in
 
 interface Props {
   fileId: string;
-  videoRef: React.RefObject<HTMLVideoElement | null>;
+  videoRef: RefObject<HTMLVideoElement | null>;
   /** Called with saved progress when it is first loaded. */
   onProgressLoaded?: (p: WatchProgress | null) => void;
 }
@@ -24,22 +24,13 @@ export function useWatchProgress({ fileId, videoRef, onProgressLoaded }: Props) 
   // load saved progress on mount → seek if applicable
   // ------------------------------------------------------------------
   useEffect(() => {
-    let cancelled = false;
-    api
-      .getProgress(fileId)
-      .then((p) => {
-        if (cancelled || !p) return;
-        onProgressLoaded?.(p);
-        if (p.position > RESUME_THRESHOLD_S && videoRef.current) {
-          videoRef.current.currentTime = p.position;
-        }
-      })
-      .catch(() => {
-        /* no saved progress — fine */
-      });
-    return () => {
-      cancelled = true;
-    };
+    const saved = progressStore.get(fileId);
+    if (saved) {
+      onProgressLoaded?.(saved);
+      if (saved.position > RESUME_THRESHOLD_S && videoRef.current) {
+        videoRef.current.currentTime = saved.position;
+      }
+    }
   }, [fileId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ------------------------------------------------------------------
@@ -51,45 +42,22 @@ export function useWatchProgress({ fileId, videoRef, onProgressLoaded }: Props) 
       if (!el || el.paused) return;
       const pos = el.currentTime;
       const dur = el.duration || durationRef.current;
-      // avoid duplicate saves for the same position
       if (Math.abs(pos - lastSavedRef.current) < 0.5) return;
       lastSavedRef.current = pos;
       durationRef.current = dur;
-      api.saveProgress(fileId, { position: pos, duration: dur }).catch(() => {});
+      progressStore.save(fileId, pos, dur);
     }, SAVE_INTERVAL_MS);
 
     return () => clearInterval(interval);
   }, [fileId, videoRef]);
 
   // ------------------------------------------------------------------
-  // save on pause (immediate = true)
+  // save on pause
   // ------------------------------------------------------------------
   const saveOnPause = useCallback(() => {
     const el = videoRef.current;
     if (!el) return;
-    const pos = el.currentTime;
-    const dur = el.duration || durationRef.current;
-    api
-      .saveProgress(fileId, { position: pos, duration: dur }, true)
-      .catch(() => {});
-  }, [fileId, videoRef]);
-
-  // ------------------------------------------------------------------
-  // save on page unload (sendBeacon, fire-and-forget)
-  // ------------------------------------------------------------------
-  useEffect(() => {
-    const handleUnload = () => {
-      const el = videoRef.current;
-      if (!el) return;
-      const pos = el.currentTime;
-      const dur = el.duration || durationRef.current;
-      const body = JSON.stringify({ position: pos, duration: dur });
-      const url = `${process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000"}/api/progress/${encodeURIComponent(fileId)}?immediate=true`;
-      navigator.sendBeacon(url, body);
-    };
-
-    window.addEventListener("beforeunload", handleUnload);
-    return () => window.removeEventListener("beforeunload", handleUnload);
+    progressStore.save(fileId, el.currentTime, el.duration || durationRef.current);
   }, [fileId, videoRef]);
 
   return { saveOnPause };

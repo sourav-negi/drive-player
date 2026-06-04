@@ -32,38 +32,40 @@ browser ─── vercel (frontend) ─── render (backend) ─── google 
 
 - **python 3.11+** — for the backend
 - **node.js 20+** — for the frontend
-- **google cloud account** — to get drive API credentials
-- **videos on google drive** — that's the whole point :)
+- **google cloud account** — to enable the drive API and create an OAuth client
 
 ## setup
 
-### 1. google drive API credentials
+### 1. google cloud setup (one time, 2 minutes)
 
 1. go to [google cloud console](https://console.cloud.google.com/)
 2. create a new project (or select an existing one)
-3. enable the **google drive API** (search "drive API" in the library)
-4. go to **APIs & Services → Credentials**
-5. click **Create Credentials → OAuth client ID**
-6. choose **Desktop application** as the type
-7. note your **client ID** and **client secret**
+3. enable the **google drive API** — search "drive API" in the library, click **ENABLE**
+4. go to **APIs & Services** → **OAuth consent screen**
+   - choose **External**, fill in app name + your email, Save
+5. go to **Credentials** → **+ CREATE CREDENTIALS** → **OAuth client ID**
+   - application type: **Desktop app**, name: `drive-pleya`, Create
+   - note the **client ID** and **client secret** (or download the JSON)
 
-next, get a refresh token:
+### 2. get your refresh token
 
-8. go to [oauth 2.0 playground](https://developers.google.com/oauthplayground)
-9. click the gear icon ⚙ → check **"use your own oauth credentials"** → enter your client ID and secret
-10. in step 1, select these scopes:
-   - `https://www.googleapis.com/auth/drive.readonly`
-   - `https://www.googleapis.com/auth/drive.file`
-11. click **authorize APIs** → sign in with your google account → allow
-12. in step 2, click **exchange authorization code for tokens**
-13. copy the **refresh token** (you'll only see it here)
+run the helper script from the `backend/` directory:
 
-keep these three values — you'll need them:
-- `GOOGLE_CLIENT_ID`
-- `GOOGLE_CLIENT_SECRET`
-- `GOOGLE_REFRESH_TOKEN`
+```bash
+python get_refresh_token.py
+```
 
-### 2. backend setup
+it will ask for your client ID and client secret, then open a browser for you to sign in. after approval, it prints the three values you need:
+
+```env
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+GOOGLE_REFRESH_TOKEN=...
+```
+
+copy these into `backend/.env`.
+
+### 3. backend setup
 
 ```bash
 cd backend
@@ -81,13 +83,7 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-edit `backend/.env` with your google credentials:
-
-```env
-GOOGLE_CLIENT_ID=your-client-id-here
-GOOGLE_CLIENT_SECRET=your-client-secret-here
-GOOGLE_REFRESH_TOKEN=your-refresh-token-here
-```
+no auth env vars needed — your gcloud ADC credentials are picked up automatically.
 
 start the backend:
 
@@ -97,7 +93,7 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
 verify it works by opening [http://localhost:8000/api/health](http://localhost:8000/api/health) — you should see `{"status": "ok"}`.
 
-### 3. frontend setup
+### 4. frontend setup
 
 ```bash
 cd frontend
@@ -203,18 +199,16 @@ drive-pleya/
 ├── backend/
 │   ├── main.py              # fastapi entry point
 │   ├── config.py             # env var loading
+│   ├── get_refresh_token.py  # one-time OAuth helper
 │   ├── requirements.txt      # python dependencies
-│   ├── .env.example          # env var template
+│   ├── .env                  # api key
 │   ├── services/
-│   │   ├── drive_client.py   # google drive API wrapper
-│   │   ├── progress_store.py # watch progress read/write
+│   │   ├── drive_client.py   # google drive API wrapper (OAuth refresh token)
 │   │   └── file_cache.py     # in-memory TTL cache
 │   ├── routes/
 │   │   ├── files.py          # file listing API
-│   │   ├── stream.py         # video streaming proxy
-│   │   └── progress.py       # progress tracking API
+│   │   └── stream.py         # video streaming proxy
 │   └── utils/
-│       └── drive_helpers.py  # shared helpers
 └── frontend/
     ├── package.json
     ├── next.config.ts
@@ -237,6 +231,7 @@ drive-pleya/
     │   ├── lib/
     │   │   ├── api.ts                # typed API client
     │   │   └── types.ts              # typescript interfaces
+│       │       └── progressStore.ts      # localStorage progress
     │   └── hooks/
     │       ├── useVideoPlayer.ts     # player state management
     │       └── useWatchProgress.ts   # progress tracking + save
@@ -245,7 +240,8 @@ drive-pleya/
 
 ## tech notes
 
-- **streaming:** the backend proxies video bytes from google drive with proper HTTP range support, so seeking works natively. an optional redirect mode (`USE_DIRECT_REDIRECT=true`) streams directly from google to save backend bandwidth.
-- **progress storage:** watch progress is stored as a JSON file (`.watch-progress.json`) on your google drive. writes are debounced to 30-second windows, with immediate writes on pause.
+- **streaming:** the backend proxies video bytes from google drive with proper HTTP range support, so seeking works natively. all requests are authenticated via an OAuth access token.
+- **authentication:** uses an OAuth 2.0 refresh token. set it up once with `python get_refresh_token.py`, then it renews access tokens automatically — works on any host (local, render, etc.).
+- **progress storage:** watch progress is saved to your browser's localStorage. persists across sessions on the same browser, but won't sync across devices.
 - **caching:** file listings are cached in memory for 5 minutes to stay within drive API rate limits.
-- **no database:** everything lives on google drive — no postgres, no redis, no monthly fees.
+- **no database:** no postgres, no redis, no monthly fees.

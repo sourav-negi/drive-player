@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { progressStore } from "@/lib/progressStore";
 import type { VideoFile, Folder, WatchProgress } from "@/lib/types";
 import { UiState } from "@/components/UiState";
 import { FileGrid } from "@/components/FileGrid";
@@ -19,13 +20,10 @@ export default function HomePage() {
     setStatus("loading");
     setError("");
     try {
-      const [filesRes, progressRes] = await Promise.all([
-        api.getFiles(folderId),
-        api.getAllProgress(),
-      ]);
+      const filesRes = await api.getFiles(folderId);
       setFolders(filesRes.folders);
       setFiles(filesRes.files);
-      setProgress(progressRes.videos);
+      setProgress(progressStore.getAll());
       setStatus(
         filesRes.files.length === 0 && filesRes.folders.length === 0
           ? "empty"

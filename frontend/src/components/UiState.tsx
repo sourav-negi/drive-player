@@ -2,6 +2,7 @@
 // drive-pleya — unified loading / error / empty state component
 // ------------------------------------------------------------------
 
+import type { ReactNode } from "react";
 import type { UiStatus } from "@/lib/types";
 
 interface Props {
@@ -10,7 +11,7 @@ interface Props {
   errorMessage?: string;
   emptyMessage?: string;
   onRetry?: () => void;
-  children?: React.ReactNode;
+  children?: ReactNode;
 }
 
 export function UiState({

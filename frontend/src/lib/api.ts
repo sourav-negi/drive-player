@@ -2,13 +2,7 @@
 // drive-pleya — typed API client
 // ------------------------------------------------------------------
 
-import type {
-  VideoFile,
-  FilesResponse,
-  ProgressResponse,
-  WatchProgress,
-  ProgressUpdate,
-} from "./types";
+import type { VideoFile, FilesResponse } from "./types";
 
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000";
@@ -72,39 +66,6 @@ export const api = {
   /** Return the URL that the <video> element should use as its src. */
   getStreamUrl(fileId: string): string {
     return `${API_BASE}/api/files/${encodeURIComponent(fileId)}/stream`;
-  },
-
-  /** Get all watch progress. */
-  getAllProgress(): Promise<ProgressResponse> {
-    return fetchApi<ProgressResponse>("/api/progress");
-  },
-
-  /** Get progress for one video. */
-  getProgress(fileId: string): Promise<WatchProgress> {
-    return fetchApi<WatchProgress>(
-      `/api/progress/${encodeURIComponent(fileId)}`,
-    );
-  },
-
-  /** Save progress. Pass immediate=true for pause / page-unload. */
-  async saveProgress(
-    fileId: string,
-    body: ProgressUpdate,
-    immediate = false,
-  ): Promise<WatchProgress> {
-    const qs = immediate ? "?immediate=true" : "";
-    return fetchApi<WatchProgress>(
-      `/api/progress/${encodeURIComponent(fileId)}${qs}`,
-      { method: "POST", body: JSON.stringify(body) },
-    );
-  },
-
-  /** Reset progress for a video. */
-  deleteProgress(fileId: string): Promise<void> {
-    return fetchApi<void>(
-      `/api/progress/${encodeURIComponent(fileId)}`,
-      { method: "DELETE" },
-    );
   },
 };
 
