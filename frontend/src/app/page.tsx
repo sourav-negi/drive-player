@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { api } from "@/lib/api";
 import { progressStore } from "@/lib/progressStore";
+import { formatTitle } from "@/lib/format";
+import { ProgressBadge } from "@/components/ProgressBadge";
 import type { VideoFile, Folder, WatchProgress } from "@/lib/types";
 import { UiState } from "@/components/UiState";
-import { FileGrid } from "@/components/FileGrid";
-import { VideoCard } from "@/components/VideoCard";
 
 export default function HomePage() {
   const [folders, setFolders] = useState<Folder[]>([]);
@@ -62,7 +63,7 @@ export default function HomePage() {
   }
 
   return (
-    <div>
+    <div className="max-w-4xl mx-auto">
       {/* breadcrumb */}
       {currentFolder && (
         <button
@@ -76,42 +77,99 @@ export default function HomePage() {
         </button>
       )}
 
-      {/* sections */}
+      {/* folders */}
       {folders.length > 0 && (
         <section className="mb-6">
-          <h2 className="text-base font-semibold text-text-muted uppercase tracking-wide mb-3">
+          <h2 className="text-sm font-semibold text-text-muted uppercase tracking-wide mb-2">
             folders
           </h2>
-          <FileGrid>
+          <div className="flex flex-wrap gap-2">
             {folders.map((f) => (
               <button
                 key={f.id}
                 onClick={() => openFolder(f.id)}
-                className="block rounded-lg border border-border bg-surface-raised p-4 hover:border-text-muted transition-colors text-left"
+                className="flex items-center gap-2 rounded-lg border border-border bg-surface-raised px-3 py-2 hover:border-text-muted transition-colors text-sm"
               >
-                <div className="flex items-center gap-3">
-                  <span className="text-2xl">📁</span>
-                  <span className="text-sm font-medium text-text truncate">
-                    {f.name}
-                  </span>
-                </div>
+                <span className="text-lg">📁</span>
+                <span className="text-text">{f.name}</span>
               </button>
             ))}
-          </FileGrid>
+          </div>
         </section>
       )}
 
+      {/* video playlist */}
       <section>
-        <h2 className="text-base font-semibold text-text-muted uppercase tracking-wide mb-3">
-          videos{" "}
-          <span className="font-normal text-text-muted">({files.length})</span>
+        <h2 className="text-sm font-semibold text-text-muted uppercase tracking-wide mb-2">
+          videos <span className="font-normal">({files.length})</span>
         </h2>
-        <FileGrid>
-          {files.map((f) => (
-            <VideoCard key={f.id} file={f} progress={progress[f.id]} />
-          ))}
-        </FileGrid>
+
+        <div className="flex flex-col">
+          {files.map((f, i) => {
+            const p = progress[f.id];
+            return (
+              <Link
+                key={f.id}
+                href={`/watch/${encodeURIComponent(f.id)}`}
+                className="group flex items-center gap-4 px-3 py-2.5 rounded-lg hover:bg-surface-raised transition-colors border border-transparent hover:border-border"
+              >
+                {/* number */}
+                <span className="w-7 text-center text-sm font-mono text-text-muted flex-shrink-0">
+                  {i + 1}
+                </span>
+
+                {/* thumbnail */}
+                <div className="w-40 flex-shrink-0 aspect-video bg-surface-card rounded overflow-hidden relative">
+                  {f.thumbnailLink ? (
+                    <img
+                      src={f.thumbnailLink}
+                      alt={f.name}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-text-muted">
+                      <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347c-.75.412-1.667-.13-1.667-.986V5.653z" />
+                      </svg>
+                    </div>
+                  )}
+                  <ProgressBadge progress={p} />
+                </div>
+
+                {/* title + meta */}
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-text truncate group-hover:text-white transition-colors">
+                    {formatTitle(f.name)}
+                  </p>
+                  {f.modifiedTime && (
+                    <p className="text-xs text-text-muted mt-0.5">
+                      {new Date(f.modifiedTime).toLocaleDateString("en-US", {
+                        year: "numeric",
+                        month: "short",
+                        day: "numeric",
+                      })}
+                    </p>
+                  )}
+                </div>
+
+                {/* duration / size */}
+                {f.size > 0 && (
+                  <span className="text-xs text-text-muted flex-shrink-0">
+                    {formatSize(f.size)}
+                  </span>
+                )}
+              </Link>
+            );
+          })}
+        </div>
       </section>
     </div>
   );
+}
+
+function formatSize(bytes: number): string {
+  const mb = bytes / (1024 * 1024);
+  if (mb >= 1000) return `${(mb / 1024).toFixed(1)} GB`;
+  return `${mb.toFixed(0)} MB`;
 }

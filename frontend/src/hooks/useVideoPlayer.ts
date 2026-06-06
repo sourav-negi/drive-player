@@ -4,9 +4,9 @@
 
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 
-export type PlaybackSpeed = 0.5 | 0.75 | 1 | 1.25 | 1.5 | 2;
+export type PlaybackSpeed = 0.5 | 0.75 | 1 | 1.25 | 1.5 | 2 | 2.5 | 3 | 3.5 | 4;
 
-const SPEEDS: PlaybackSpeed[] = [0.5, 0.75, 1, 1.25, 1.5, 2];
+const SPEEDS: PlaybackSpeed[] = [0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3, 3.5, 4];
 const STORAGE_KEY_VOLUME = "drive-pleya:volume";
 const STORAGE_KEY_SPEED = "drive-pleya:speed";
 
@@ -24,26 +24,48 @@ function saveStored(key: string, value: unknown) {
   try {
     localStorage.setItem(key, JSON.stringify(value));
   } catch {
-    /* quota exceeded — ignore */
+    /* quota exceeded */
   }
 }
 
-export function useVideoPlayer(videoRef: RefObject<HTMLVideoElement | null>) {
+export interface VideoPlayerAPI {
+  playing: boolean;
+  buffering: boolean;
+  currentTime: number;
+  duration: number;
+  volume: number;
+  muted: boolean;
+  speed: PlaybackSpeed;
+  isFullscreen: boolean;
+  togglePlay: () => void;
+  seek: (seconds: number) => void;
+  skip: (delta: number) => void;
+  setVolume: (v: number) => void;
+  toggleMute: () => void;
+  setSpeed: (s: PlaybackSpeed) => void;
+  cycleSpeed: (dir: 1 | -1) => void;
+  toggleFullscreen: () => void;
+  SPEEDS: readonly PlaybackSpeed[];
+}
+
+export function useVideoPlayer(
+  videoRef: RefObject<HTMLVideoElement | null>,
+  fullscreenRef?: RefObject<HTMLDivElement | null>,
+): VideoPlayerAPI {
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [volume, setVolume] = useState(() => loadStored(STORAGE_KEY_VOLUME, 1));
+  const [volume, setVolumeState] = useState(() => loadStored(STORAGE_KEY_VOLUME, 1));
   const [muted, setMuted] = useState(false);
   const [speed, setSpeedState] = useState<PlaybackSpeed>(() =>
     loadStored(STORAGE_KEY_SPEED, 1),
   );
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [buffering, setBuffering] = useState(false);
 
   // sync fullscreen state with browser (handles Esc key)
   useEffect(() => {
-    const handler = () => {
-      setIsFullscreen(!!document.fullscreenElement);
-    };
+    const handler = () => setIsFullscreen(!!document.fullscreenElement);
     document.addEventListener("fullscreenchange", handler);
     return () => document.removeEventListener("fullscreenchange", handler);
   }, []);
@@ -53,15 +75,14 @@ export function useVideoPlayer(videoRef: RefObject<HTMLVideoElement | null>) {
     const el = videoRef.current;
     if (!el) return;
 
-    const onPlay = () => setPlaying(true);
+    const onPlay = () => { setPlaying(true); setBuffering(false); };
     const onPause = () => setPlaying(false);
     const onEnded = () => setPlaying(false);
     const onTime = () => setCurrentTime(el.currentTime);
     const onDuration = () => setDuration(el.duration || 0);
-    const onVolume = () => {
-      setVolume(el.volume);
-      setMuted(el.muted);
-    };
+    const onVolume = () => { setVolumeState(el.volume); setMuted(el.muted); };
+    const onWaiting = () => setBuffering(true);
+    const onCanPlay = () => setBuffering(false);
 
     el.addEventListener("play", onPlay);
     el.addEventListener("pause", onPause);
@@ -69,9 +90,11 @@ export function useVideoPlayer(videoRef: RefObject<HTMLVideoElement | null>) {
     el.addEventListener("timeupdate", onTime);
     el.addEventListener("durationchange", onDuration);
     el.addEventListener("volumechange", onVolume);
+    el.addEventListener("waiting", onWaiting);
+    el.addEventListener("canplay", onCanPlay);
 
-    // initial values
-    setVolume(el.volume);
+    // init
+    setVolumeState(el.volume);
     setMuted(el.muted);
     if (el.duration) setDuration(el.duration);
 
@@ -82,47 +105,40 @@ export function useVideoPlayer(videoRef: RefObject<HTMLVideoElement | null>) {
       el.removeEventListener("timeupdate", onTime);
       el.removeEventListener("durationchange", onDuration);
       el.removeEventListener("volumechange", onVolume);
+      el.removeEventListener("waiting", onWaiting);
+      el.removeEventListener("canplay", onCanPlay);
     };
   }, [videoRef]);
 
-  // play / pause
+  // ------- actions (direct, no guards) -------
+
   const togglePlay = useCallback(() => {
     const el = videoRef.current;
     if (!el) return;
-    el.paused ? el.play() : el.pause();
+    if (el.paused) {
+      el.play().catch(() => {});
+    } else {
+      el.pause();
+    }
   }, [videoRef]);
 
-  // seek
-  const seek = useCallback(
-    (seconds: number) => {
-      const el = videoRef.current;
-      if (el) el.currentTime = Math.max(0, Math.min(el.duration || 0, seconds));
-    },
-    [videoRef],
-  );
+  const seek = useCallback((seconds: number) => {
+    const el = videoRef.current;
+    if (el) el.currentTime = seconds;
+  }, [videoRef]);
 
-  const skip = useCallback(
-    (delta: number) => {
-      const el = videoRef.current;
-      if (el) seek(el.currentTime + delta);
-    },
-    [videoRef, seek],
-  );
+  const skip = useCallback((delta: number) => {
+    const el = videoRef.current;
+    if (el) el.currentTime = el.currentTime + delta;
+  }, [videoRef]);
 
-  // volume
-  const setVolumeAndSave = useCallback(
-    (v: number) => {
-      const el = videoRef.current;
-      if (el) {
-        el.volume = v;
-        el.muted = v === 0;
-      }
-      setVolume(v);
-      setMuted(v === 0);
-      saveStored(STORAGE_KEY_VOLUME, v);
-    },
-    [videoRef],
-  );
+  const setVolumeAndSave = useCallback((v: number) => {
+    const el = videoRef.current;
+    if (el) { el.volume = v; el.muted = v === 0; }
+    setVolumeState(v);
+    setMuted(v === 0);
+    saveStored(STORAGE_KEY_VOLUME, v);
+  }, [videoRef]);
 
   const toggleMute = useCallback(() => {
     const el = videoRef.current;
@@ -131,54 +147,34 @@ export function useVideoPlayer(videoRef: RefObject<HTMLVideoElement | null>) {
     setMuted(el.muted);
   }, [videoRef]);
 
-  // speed
-  const setSpeed = useCallback(
-    (s: PlaybackSpeed) => {
-      const el = videoRef.current;
-      if (el) el.playbackRate = s;
-      setSpeedState(s);
-      saveStored(STORAGE_KEY_SPEED, s);
-    },
-    [videoRef],
-  );
+  const setSpeed = useCallback((s: PlaybackSpeed) => {
+    const el = videoRef.current;
+    if (el) el.playbackRate = s;
+    setSpeedState(s);
+    saveStored(STORAGE_KEY_SPEED, s);
+  }, [videoRef]);
 
-  const cycleSpeed = useCallback(
-    (dir: 1 | -1) => {
-      const idx = SPEEDS.indexOf(speed);
-      const next = (idx + dir + SPEEDS.length) % SPEEDS.length;
-      setSpeed(SPEEDS[next]);
-    },
-    [speed, setSpeed],
-  );
+  const cycleSpeed = useCallback((dir: 1 | -1) => {
+    const idx = SPEEDS.indexOf(speed);
+    const next = (idx + dir + SPEEDS.length) % SPEEDS.length;
+    setSpeed(SPEEDS[next]);
+  }, [speed, setSpeed]);
 
-  // fullscreen
   const toggleFullscreen = useCallback(() => {
-    if (typeof document === "undefined") return;
+    const target = fullscreenRef?.current ?? videoRef.current;
+    if (!target) return;
     if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen?.();
-      setIsFullscreen(true);
+      target.requestFullscreen().catch(() => {});
     } else {
-      document.exitFullscreen?.();
-      setIsFullscreen(false);
+      document.exitFullscreen().catch(() => {});
     }
-  }, []);
+  }, [videoRef, fullscreenRef]);
 
   return {
-    playing,
-    currentTime,
-    duration,
-    volume,
-    muted,
-    speed,
-    isFullscreen,
-    togglePlay,
-    seek,
-    skip,
+    playing, buffering, currentTime, duration, volume, muted, speed, isFullscreen,
+    togglePlay, seek, skip,
     setVolume: setVolumeAndSave,
-    toggleMute,
-    setSpeed,
-    cycleSpeed,
-    toggleFullscreen,
+    toggleMute, setSpeed, cycleSpeed, toggleFullscreen,
     SPEEDS,
-  } as const;
+  };
 }

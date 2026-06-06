@@ -30,6 +30,29 @@ body {
 }
 
 /* ------------------------------------------------------------------ */
+/* fullscreen                                                           */
+/* ------------------------------------------------------------------ */
+
+/* when the player container goes fullscreen, make the video fill it */
+div:fullscreen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: black;
+  border-radius: 0;
+}
+
+div:fullscreen video {
+  width: 100vw;
+  height: 100vh;
+  object-fit: contain;
+}
+
+div:fullscreen .controls-overlay {
+  position: fixed;
+}
+
+/* ------------------------------------------------------------------ */
 /* utility                                                             */
 /* ------------------------------------------------------------------ */
 

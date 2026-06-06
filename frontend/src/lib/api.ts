@@ -67,6 +67,11 @@ export const api = {
   getStreamUrl(fileId: string): string {
     return `${API_BASE}/api/files/${encodeURIComponent(fileId)}/stream`;
   },
+
+  /** Return a thumbnail proxy URL (backend fetches it with OAuth). */
+  getThumbnailUrl(fileId: string): string {
+    return `${API_BASE}/api/files/${encodeURIComponent(fileId)}/thumbnail`;
+  },
 };
 
 export { ApiError };
