@@ -3,10 +3,4 @@
   "buildCommand": "next build",
   "outputDirectory": ".next",
   "installCommand": "npm install",
-  "env": {
-    "NEXT_PUBLIC_API_BASE": {
-      "description": "URL of the Render backend (e.g. https://drive-pleya.onrender.com)",
-      "required": true
-    }
-  }
 }
