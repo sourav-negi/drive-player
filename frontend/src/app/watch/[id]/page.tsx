@@ -26,7 +26,7 @@ export default function WatchPage({ params }: Props) {
   const [allFiles, setAllFiles] = useState<VideoFile[]>([]);
   const [progress, setProgress] = useState<WatchProgress | undefined>();
   const [status, setStatus] = useState<"loading" | "error" | "success">("loading");
-  const [error, setError] = useState("");
+  const [error, setError] = useState<unknown>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -46,7 +46,7 @@ export default function WatchPage({ params }: Props) {
         setStatus("success");
       } catch (err) {
         if (cancelled) return;
-        setError(err instanceof Error ? err.message : "failed to load video");
+        setError(err);
         setStatus("error");
       }
     }
@@ -61,12 +61,13 @@ export default function WatchPage({ params }: Props) {
     <UiState
       status={status}
       loadingMessage="loading video..."
-      errorMessage={error}
+      errorMessage={error instanceof Error ? error.message : "failed to load video"}
+      error={error}
       onRetry={() => router.refresh()}
     >
       {file && (
-        <div className="flex gap-4">
-          {/* --- left column: player + info --- */}
+        <div className="flex flex-col xl:flex-row gap-4">
+          {/* --- primary: player + info --- */}
           <div className="flex-1 min-w-0 flex flex-col gap-4">
             <VideoPlayer
               src={api.getStreamUrl(file.id)}
@@ -104,9 +105,9 @@ export default function WatchPage({ params }: Props) {
             </button>
           </div>
 
-          {/* --- right column: playlist sidebar --- */}
+          {/* --- sidebar: playlist (below on mobile, side on xl+) --- */}
           {allFiles.length > 0 && (
-            <div className="w-80 flex-shrink-0 hidden xl:block">
+            <div className="xl:w-80 xl:flex-shrink-0 w-full">
               <PlaylistSidebar files={allFiles} currentId={file.id} />
             </div>
           )}

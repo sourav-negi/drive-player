@@ -7,27 +7,11 @@
 import Link from "next/link";
 import type { VideoFile } from "@/lib/types";
 import { formatTitle } from "@/lib/format";
-import { api } from "@/lib/api";
+import { ThumbnailImg } from "./ThumbnailImg";
 
 interface Props {
   files: VideoFile[];
   currentId: string;
-}
-
-function ThumbnailImg({ file }: { file: VideoFile }) {
-  const { id, name, thumbnailLink } = file;
-  const src = thumbnailLink || api.getThumbnailUrl(id);
-
-  return (
-    <div className="w-28 flex-shrink-0 aspect-video bg-surface-card rounded overflow-hidden">
-      <img
-        src={src}
-        alt={name}
-        className="w-full h-full object-cover"
-        loading="lazy"
-      />
-    </div>
-  );
 }
 
 export function PlaylistSidebar({ files, currentId }: Props) {
@@ -55,7 +39,9 @@ export function PlaylistSidebar({ files, currentId }: Props) {
             </span>
 
             {/* thumbnail */}
-            <ThumbnailImg file={f} />
+            <div className="w-28 flex-shrink-0 aspect-video bg-surface-card rounded overflow-hidden">
+              <ThumbnailImg file={f} className="w-full h-full" iconSize="sm" />
+            </div>
 
             {/* title */}
             <div className="min-w-0 flex-1">

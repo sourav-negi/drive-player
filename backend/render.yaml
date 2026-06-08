@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: drive-pleya
+    runtime: python
+    region: oregon
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    plan: free
+    envVars:
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REFRESH_TOKEN
+        sync: false
+      - key: CORS_ORIGINS
+        value: https://your-app.vercel.app,http://localhost:3000
+      - key: GOOGLE_DRIVE_FOLDER_ID
+        value: root

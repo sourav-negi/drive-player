@@ -41,26 +41,50 @@ async def stream_video(file_id: str, request: Request):
     headers: dict[str, str] = {
         "Authorization": f"Bearer {access_token}",
     }
-    range_header = request.headers.get("range", "")
+    range_header = request.headers.get("range")
     if range_header:
         headers["Range"] = range_header
 
+    client = httpx.AsyncClient(timeout=httpx.Timeout(600))
+    try:
+        req = client.build_request("GET", url, headers=headers)
+        resp = await client.send(req, stream=True)
+        if resp.status_code >= 400:
+            logger.warning("drive stream error %d on %s", resp.status_code, file_id)
+            await resp.aclose()
+            await client.aclose()
+            raise HTTPException(status_code=resp.status_code, detail="Drive stream error")
+    except Exception as exc:
+        if isinstance(exc, HTTPException):
+            raise exc
+        logger.exception("failed to initiate stream to drive")
+        await client.aclose()
+        raise HTTPException(status_code=502, detail="failed to connect to drive")
+
     async def _stream():
         """Pull chunks from Drive and yield them to the client."""
-        async with httpx.AsyncClient(timeout=httpx.Timeout(600)) as client:
-            async with client.stream("GET", url, headers=headers) as resp:
-                if resp.status_code >= 400:
-                    logger.warning("drive stream error %d on %s",
-                                   resp.status_code, file_id)
-                    return
-                async for chunk in resp.aiter_bytes(CHUNK_SIZE):
-                    yield chunk
+        try:
+            async for chunk in resp.aiter_bytes(CHUNK_SIZE):
+                yield chunk
+        finally:
+            await resp.aclose()
+            await client.aclose()
+
+    response_headers = {
+        "Accept-Ranges": "bytes",
+        "Cache-Control": "public, max-age=86400",
+    }
+    if "content-range" in resp.headers:
+        response_headers["Content-Range"] = resp.headers["content-range"]
+    if "content-length" in resp.headers:
+        response_headers["Content-Length"] = resp.headers["content-length"]
+
+    media_type = resp.headers.get("content-type", "video/mp4")
 
     return StreamingResponse(
         _stream(),
-        media_type="video/mp4",
-        headers={
-            "Accept-Ranges": "bytes",
-            "Cache-Control": "public, max-age=86400",
-        },
+        status_code=resp.status_code,
+        media_type=media_type,
+        headers=response_headers,
     )
+

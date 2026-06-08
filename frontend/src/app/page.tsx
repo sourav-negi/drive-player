@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import { progressStore } from "@/lib/progressStore";
 import { formatTitle } from "@/lib/format";
 import { ProgressBadge } from "@/components/ProgressBadge";
+import { ThumbnailImg } from "@/components/ThumbnailImg";
 import type { VideoFile, Folder, WatchProgress } from "@/lib/types";
 import { UiState } from "@/components/UiState";
 
@@ -15,11 +16,11 @@ export default function HomePage() {
   const [currentFolder, setCurrentFolder] = useState<string | null>(null);
   const [progress, setProgress] = useState<Record<string, WatchProgress>>({});
   const [status, setStatus] = useState<"loading" | "error" | "empty" | "success">("loading");
-  const [error, setError] = useState("");
+  const [error, setError] = useState<unknown>(null);
 
   const fetchData = async (folderId?: string) => {
     setStatus("loading");
-    setError("");
+    setError(null);
     try {
       const filesRes = await api.getFiles(folderId);
       setFolders(filesRes.folders);
@@ -31,7 +32,7 @@ export default function HomePage() {
           : "success",
       );
     } catch (err) {
-      setError(err instanceof Error ? err.message : "something went wrong");
+      setError(err);
       setStatus("error");
     }
   };
@@ -55,7 +56,8 @@ export default function HomePage() {
       <UiState
         status={status}
         loadingMessage="scanning your drive..."
-        errorMessage={error}
+        errorMessage={error instanceof Error ? error.message : "something went wrong"}
+        error={error}
         emptyMessage="no videos found on drive"
         onRetry={() => fetchData(currentFolder ?? undefined)}
       />
@@ -63,7 +65,7 @@ export default function HomePage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="max-w-5xl mx-auto">
       {/* breadcrumb */}
       {currentFolder && (
         <button
@@ -104,42 +106,33 @@ export default function HomePage() {
           videos <span className="font-normal">({files.length})</span>
         </h2>
 
-        <div className="flex flex-col">
+        <div className="flex flex-col gap-0.5">
           {files.map((f, i) => {
             const p = progress[f.id];
             return (
               <Link
                 key={f.id}
                 href={`/watch/${encodeURIComponent(f.id)}`}
-                className="group flex items-center gap-4 px-3 py-2.5 rounded-lg hover:bg-surface-raised transition-colors border border-transparent hover:border-border"
+                className="group flex items-center gap-2 sm:gap-4 px-2 sm:px-3 py-2 sm:py-2.5 rounded-lg hover:bg-surface-raised transition-colors border border-transparent hover:border-border"
               >
                 {/* number */}
-                <span className="w-7 text-center text-sm font-mono text-text-muted flex-shrink-0">
+                <span className="w-5 sm:w-7 text-center text-xs sm:text-sm font-mono text-text-muted flex-shrink-0">
                   {i + 1}
                 </span>
 
                 {/* thumbnail */}
-                <div className="w-40 flex-shrink-0 aspect-video bg-surface-card rounded overflow-hidden relative">
-                  {f.thumbnailLink ? (
-                    <img
-                      src={f.thumbnailLink}
-                      alt={f.name}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                      loading="lazy"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-text-muted">
-                      <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347c-.75.412-1.667-.13-1.667-.986V5.653z" />
-                      </svg>
-                    </div>
-                  )}
+                <div className="w-28 sm:w-40 flex-shrink-0 aspect-video bg-surface-card rounded overflow-hidden relative">
+                  <ThumbnailImg
+                    file={f}
+                    className="w-full h-full group-hover:scale-105 transition-transform duration-300"
+                    iconSize="sm"
+                  />
                   <ProgressBadge progress={p} />
                 </div>
 
                 {/* title + meta */}
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-text truncate group-hover:text-white transition-colors">
+                  <p className="text-xs sm:text-sm font-medium text-text truncate group-hover:text-white transition-colors">
                     {formatTitle(f.name)}
                   </p>
                   {f.modifiedTime && (

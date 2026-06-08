@@ -16,11 +16,30 @@
 }
 
 /* ------------------------------------------------------------------ */
+/* light theme overrides (applied via data-theme="light")               */
+/* ------------------------------------------------------------------ */
+
+[data-theme="light"] {
+  --color-brand: #dc2626;
+  --color-brand-hover: #b91c1c;
+  --color-surface: #fafafa;
+  --color-surface-raised: #ffffff;
+  --color-surface-card: #f4f4f5;
+  --color-text: #18181b;
+  --color-text-muted: #71717a;
+  --color-border: #e4e4e7;
+}
+
+/* ------------------------------------------------------------------ */
 /* base overrides                                                       */
 /* ------------------------------------------------------------------ */
 
 html {
   color-scheme: dark;
+}
+
+[data-theme="light"] {
+  color-scheme: light;
 }
 
 body {

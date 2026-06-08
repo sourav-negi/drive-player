@@ -17,7 +17,7 @@ export function VolumeControl({ volume, muted, onVolume, onToggleMute }: Props) 
       {/* mute button */}
       <button
         onClick={onToggleMute}
-        className="h-8 w-8 flex items-center justify-center rounded text-text hover:text-white transition-colors"
+        className="h-8 w-8 flex items-center justify-center rounded text-black hover:text-gray-700 transition-colors"
         title={muted ? "unmute" : "mute"}
       >
         <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
@@ -37,9 +37,9 @@ export function VolumeControl({ volume, muted, onVolume, onToggleMute }: Props) 
         step={0.05}
         value={vol}
         onChange={(e) => onVolume(Number(e.target.value))}
-        className="w-20 h-1 bg-white/20 rounded-full appearance-none cursor-pointer
+        className="w-20 h-1 bg-black/20 rounded-full appearance-none cursor-pointer
                    [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3
-                   [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:cursor-pointer"
+                   [&::-webkit-slider-thumb]:bg-black [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:cursor-pointer"
       />
     </div>
   );

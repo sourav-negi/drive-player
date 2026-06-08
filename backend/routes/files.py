@@ -56,7 +56,13 @@ async def get_file(file_id: str):
 
 @router.get("/files/{file_id}/thumbnail")
 async def get_thumbnail(file_id: str):
-    """Proxy a file's thumbnail from Google Drive (uses OAuth so it always works)."""
+    """Download and proxy a file's thumbnail from Google Drive.
+
+    Google's thumbnail CDN (lh3.googleusercontent.com) serves URLs that
+    are public for shared files but may require auth for private ones.
+    We download the bytes server-side so the browser never touches the
+    CDN directly — this avoids auth/cookie issues in the browser.
+    """
     import httpx
 
     cache_key = f"thumb:{file_id}"
@@ -64,30 +70,47 @@ async def get_thumbnail(file_id: str):
     if isinstance(raw, dict):
         return Response(content=raw["body"], media_type=str(raw["mime"]))
 
+    # 1. get the thumbnail URL from Drive metadata
     try:
         file_meta = drive_client.get_file(file_id)
-        thumbnail_url = file_meta.get("thumbnailLink")
-        if not thumbnail_url:
-            raise HTTPException(status_code=404, detail="no thumbnail available")
-
-        token = drive_client.get_access_token()
-        headers = {"Authorization": f"Bearer {token}"}
-
-        async with httpx.AsyncClient(timeout=httpx.Timeout(15)) as client:
-            resp = await client.get(str(thumbnail_url), headers=headers)
-            if resp.status_code >= 400:
-                raise HTTPException(status_code=502, detail="thumbnail fetch failed")
-
-        content_type = resp.headers.get("content-type", "image/jpeg")
-        body: bytes = resp.content
-        _thumbnail_cache.set(cache_key, {"body": body, "mime": content_type})
-        return Response(content=body, media_type=content_type)
-
-    except HTTPException:
-        raise
+        thumbnail_url: str | None = file_meta.get("thumbnailLink")
     except Exception:
-        logger.exception("thumbnail proxy failed for %s", file_id)
-        raise HTTPException(status_code=502, detail="thumbnail fetch failed")
+        logger.exception("thumbnail metadata fetch failed for %s", file_id)
+        raise HTTPException(status_code=502, detail="metadata fetch failed")
+
+    if not thumbnail_url:
+        raise HTTPException(status_code=404, detail="no thumbnail")
+
+    # 2. download the image bytes (server-side, not browser)
+    content_type = "image/jpeg"
+    body: bytes | None = None
+
+    async with httpx.AsyncClient(timeout=httpx.Timeout(15)) as client:
+        # 2a. try public (no auth) — works for shared files
+        resp = await client.get(thumbnail_url)
+        if resp.status_code < 400:
+            content_type = resp.headers.get("content-type", content_type)
+            body = resp.content
+
+        # 2b. public failed — try with OAuth access token for private files
+        if body is None:
+            try:
+                token = drive_client.get_access_token()
+                resp2 = await client.get(
+                    thumbnail_url,
+                    headers={"Authorization": f"Bearer {token}"},
+                )
+                if resp2.status_code < 400:
+                    content_type = resp2.headers.get("content-type", content_type)
+                    body = resp2.content
+            except Exception:
+                logger.warning("thumbnail OAuth attempt failed for %s", file_id)
+
+    if body is None:
+        raise HTTPException(status_code=502, detail="thumbnail download failed")
+
+    _thumbnail_cache.set(cache_key, {"body": body, "mime": content_type})
+    return Response(content=body, media_type=content_type)
 
 
 # ------------------------------------------------------------------
